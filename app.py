@@ -64,11 +64,11 @@ def main():
         # Date range
         st.subheader("Date Range")
         end_date = st.date_input("End Date", value=datetime.now().date())
-        days_back = st.slider("Days to look back", min_value=7, max_value=365, value=30)
+        days_back = st.number_input("Days to look back", min_value=7, max_value=365, value=30, step=1)
         start_date = end_date - timedelta(days=days_back)
         
         # Max results
-        max_results = st.slider("Maximum papers to fetch", min_value=10, max_value=500, value=100)
+        max_results = st.number_input("Maximum papers to fetch", min_value=10, max_value=500, value=100, step=10)
         
         # Search button
         if st.button("🔍 Fetch Papers", type="primary"):
