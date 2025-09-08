@@ -28,6 +28,79 @@ def get_components():
 
 arxiv_client, text_analyzer, data_processor, visualizations = get_components()
 
+def analyze_trending_concepts(df):
+    """Extract and analyze trending concepts from paper titles"""
+    import re
+    from collections import Counter
+    
+    if df.empty:
+        return []
+    
+    # Extract meaningful words from titles
+    all_concepts = []
+    stop_words = {'using', 'based', 'analysis', 'study', 'research', 'approach', 
+                 'method', 'system', 'model', 'application', 'paper', 'new', 
+                 'novel', 'improved', 'enhanced', 'via', 'through', 'with', 'for'}
+    
+    for title in df['title'].fillna(''):
+        # Extract meaningful terms (2+ characters, alphabetic)
+        words = re.findall(r'\b[a-zA-Z]{3,}\b', title.lower())
+        # Filter out common academic words
+        meaningful_words = [word for word in words if word not in stop_words]
+        all_concepts.extend(meaningful_words)
+    
+    # Count frequencies
+    concept_counts = Counter(all_concepts)
+    
+    # Return top concepts with frequency >= 2
+    trending = [{'concept': concept, 'frequency': freq} 
+                for concept, freq in concept_counts.most_common(50) 
+                if freq >= 2]
+    
+    return trending
+
+def analyze_concept_evolution(df):
+    """Analyze how research concepts evolve over time"""
+    import re
+    from collections import defaultdict
+    
+    if df.empty or len(df) < 10:
+        return []
+    
+    # Group papers by time periods
+    df_sorted = df.sort_values('date')
+    
+    # Get top concepts first
+    trending_concepts = analyze_trending_concepts(df)
+    if not trending_concepts:
+        return []
+    
+    # Focus on top 5 most frequent concepts
+    top_concepts = [item['concept'] for item in trending_concepts[:5]]
+    
+    # Track concept frequency over time
+    concept_timeline = defaultdict(lambda: defaultdict(int))
+    
+    for _, row in df_sorted.iterrows():
+        date = row['date']
+        title = str(row['title']).lower()
+        
+        for concept in top_concepts:
+            if concept in title:
+                concept_timeline[concept][date] += 1
+    
+    # Convert to format suitable for plotting
+    timeline_data = []
+    for concept, dates in concept_timeline.items():
+        for date, freq in dates.items():
+            timeline_data.append({
+                'concept': concept,
+                'date': date,
+                'frequency': freq
+            })
+    
+    return timeline_data
+
 def main():
     st.set_page_config(
         page_title="ArXiv Research Trends Analyzer",
@@ -98,16 +171,16 @@ def main():
             st.subheader("Analysis Options")
             
             # Keyword analysis parameters
-            min_keyword_freq = st.slider("Minimum keyword frequency", min_value=1, max_value=10, value=2)
-            max_keywords = st.slider("Maximum keywords to show", min_value=10, max_value=100, value=50)
+            min_keyword_freq = st.number_input("Minimum keyword frequency", min_value=1, max_value=10, value=2, step=1)
+            max_keywords = st.number_input("Maximum keywords to show", min_value=10, max_value=100, value=50, step=5)
             
             if st.button("🔬 Analyze Papers"):
                 with st.spinner("Analyzing papers..."):
                     try:
                         # Perform text analysis
-                        abstracts = st.session_state.papers_data['abstract'].tolist()
+                        abstracts = st.session_state.papers_data['abstract'].fillna('').tolist()
                         keywords = text_analyzer.extract_keywords(abstracts, min_freq=min_keyword_freq)
-                        topics = text_analyzer.cluster_topics(abstracts, n_clusters=5)
+                        topics = text_analyzer.cluster_topics(abstracts, n_clusters=min(5, len(abstracts)//2 if len(abstracts) > 0 else 1))
                         
                         # Store results
                         st.session_state.analysis_results = {
@@ -199,25 +272,50 @@ def display_analysis_dashboard():
 
 def display_trends_analysis():
     """Display trends and temporal analysis"""
-    st.subheader("Publication Trends Over Time")
+    st.subheader("Research Trend Analysis")
     
     # Prepare data for visualization
     df = st.session_state.papers_data.copy()
     df['published'] = pd.to_datetime(df['published'])
     df['date'] = df['published'].dt.date
     
-    # Publication frequency over time
-    daily_counts = df.groupby('date').size().reset_index(name='count')
+    # Extract trending concepts from titles over time
+    st.subheader("📈 Trending Research Concepts")
+    trending_concepts = analyze_trending_concepts(df)
     
-    fig = px.line(
-        daily_counts, 
-        x='date', 
-        y='count',
-        title='Daily Publication Frequency',
-        labels={'date': 'Date', 'count': 'Number of Papers'}
-    )
-    fig.update_layout(height=400)
-    st.plotly_chart(fig, use_container_width=True)
+    if trending_concepts:
+        # Create trending concepts visualization
+        concept_df = pd.DataFrame(trending_concepts)
+        fig = px.bar(
+            concept_df.head(15),
+            x='frequency',
+            y='concept',
+            orientation='h',
+            title='Most Frequent Research Concepts in Titles',
+            labels={'frequency': 'Frequency', 'concept': 'Research Concept'},
+            color='frequency',
+            color_continuous_scale='viridis'
+        )
+        fig.update_layout(height=500, yaxis={'categoryorder': 'total ascending'})
+        st.plotly_chart(fig, use_container_width=True)
+    
+    # Show concept evolution over time if we have sufficient date range
+    date_range = (df['date'].max() - df['date'].min()).days
+    if date_range > 7:  # More than a week of data
+        st.subheader("📊 Research Focus Evolution")
+        concept_timeline = analyze_concept_evolution(df)
+        
+        if concept_timeline:
+            fig_timeline = px.line(
+                concept_timeline,
+                x='date',
+                y='frequency',
+                color='concept',
+                title='Evolution of Key Research Concepts Over Time',
+                labels={'date': 'Date', 'frequency': 'Frequency', 'concept': 'Concept'}
+            )
+            fig_timeline.update_layout(height=400)
+            st.plotly_chart(fig_timeline, use_container_width=True)
     
     # Top authors by publication count
     st.subheader("Most Active Authors")
