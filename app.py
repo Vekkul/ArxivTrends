@@ -45,14 +45,14 @@ def main():
         
         # Subject categories
         categories = {
-            "Computer Science - Artificial Intelligence": "cs.AI",
-            "Computer Science - Machine Learning": "cs.LG",
-            "Computer Science - Computation and Language": "cs.CL",
-            "Computer Science - Computer Vision": "cs.CV",
-            "Physics - General Physics": "physics.gen-ph",
-            "Mathematics - Statistics Theory": "math.ST",
+            "CS - Artificial Intelligence": "cs.AI",
+            "CS - Machine Learning": "cs.LG",
+            "CS - Natural Language": "cs.CL",
+            "CS - Computer Vision": "cs.CV",
+            "Physics - General": "physics.gen-ph",
+            "Mathematics - Statistics": "math.ST",
             "Quantitative Biology": "q-bio",
-            "Statistics - Machine Learning": "stat.ML"
+            "Statistics - ML": "stat.ML"
         }
         
         selected_category = st.selectbox(
