@@ -38,9 +38,13 @@ def analyze_trending_concepts(df):
     
     # Extract meaningful words from titles
     all_concepts = []
-    stop_words = {'using', 'based', 'analysis', 'study', 'research', 'approach', 
-                 'method', 'system', 'model', 'application', 'paper', 'new', 
-                 'novel', 'improved', 'enhanced', 'via', 'through', 'with', 'for'}
+    stop_words = {'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by',
+                 'from', 'up', 'about', 'into', 'over', 'after', 'an', 'a', 'is', 'are', 'was', 'were',
+                 'using', 'based', 'analysis', 'study', 'research', 'approach', 'method', 'system', 
+                 'model', 'application', 'paper', 'new', 'novel', 'improved', 'enhanced', 'via', 
+                 'through', 'can', 'will', 'may', 'our', 'we', 'their', 'this', 'that', 'these', 
+                 'those', 'has', 'have', 'had', 'been', 'being', 'do', 'does', 'did', 'will', 'would',
+                 'could', 'should', 'may', 'might', 'must', 'shall', 'get', 'got', 'getting'}
     
     for title in df['title'].fillna(''):
         # Extract meaningful terms (2+ characters, alphabetic)
@@ -178,9 +182,21 @@ def main():
                 with st.spinner("Analyzing papers..."):
                     try:
                         # Perform text analysis
+                        if len(st.session_state.papers_data) == 0:
+                            st.error("No papers available for analysis.")
+                            return
+                        
                         abstracts = st.session_state.papers_data['abstract'].fillna('').tolist()
+                        # Filter out empty abstracts
+                        abstracts = [abs for abs in abstracts if abs.strip()]
+                        
+                        if not abstracts:
+                            st.error("No valid abstracts found for analysis.")
+                            return
+                        
                         keywords = text_analyzer.extract_keywords(abstracts, min_freq=min_keyword_freq)
-                        topics = text_analyzer.cluster_topics(abstracts, n_clusters=min(5, len(abstracts)//2 if len(abstracts) > 0 else 1))
+                        n_clusters = min(5, max(1, len(abstracts)//3)) if len(abstracts) >= 3 else 1
+                        topics = text_analyzer.cluster_topics(abstracts, n_clusters=n_clusters)
                         
                         # Store results
                         st.session_state.analysis_results = {
@@ -205,26 +221,29 @@ def main():
         
         with col1:
             st.markdown("""
-            **📈 Trends Analysis**
-            - Publication frequency over time
+            **📈 Research Trends**
+            - Trending research concepts over time
+            - Evolution of key topics
             - Author collaboration patterns
-            - Category popularity trends
+            - Research focus shifts
             """)
         
         with col2:
             st.markdown("""
             **🔤 Text Analysis**
-            - Keyword extraction and frequency
+            - Keyword extraction from abstracts
             - Topic clustering and modeling
-            - Abstract sentiment analysis
+            - Research theme identification
+            - Technical term analysis
             """)
         
         with col3:
             st.markdown("""
             **📊 Data Insights**
+            - Interactive visualizations
             - Statistical summaries
             - Export analysis results
-            - Interactive visualizations
+            - Comprehensive reports
             """)
     
     else:
