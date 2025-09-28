@@ -1,5 +1,7 @@
 import nltk
 import re
+import ssl
+import os
 from collections import Counter
 from typing import List, Dict, Tuple
 import numpy as np
@@ -8,31 +10,37 @@ from sklearn.cluster import KMeans
 from sklearn.decomposition import LatentDirichletAllocation
 import streamlit as st
 
-# Download required NLTK data
+# Handle SSL issues in cloud environments
 try:
-    nltk.data.find('tokenizers/punkt')
-except LookupError:
-    nltk.download('punkt', quiet=True)
+    _create_unverified_https_context = ssl._create_unverified_context
+except AttributeError:
+    pass
+else:
+    ssl._create_default_https_context = _create_unverified_https_context
 
-try:
-    nltk.data.find('tokenizers/punkt_tab')
-except LookupError:
-    nltk.download('punkt_tab', quiet=True)
+# Set up NLTK data path for Replit
+nltk_data_path = os.path.join(os.getcwd(), 'nltk_data')
+os.makedirs(nltk_data_path, exist_ok=True)
+if nltk_data_path not in nltk.data.path:
+    nltk.data.path.insert(0, nltk_data_path)
 
-try:
-    nltk.data.find('corpora/stopwords')
-except LookupError:
-    nltk.download('stopwords', quiet=True)
+# Download required NLTK data with error handling
+def download_nltk_resource(resource_name, resource_path):
+    try:
+        nltk.data.find(resource_path)
+    except LookupError:
+        try:
+            nltk.download(resource_name, download_dir=nltk_data_path, quiet=True)
+        except Exception as e:
+            print(f"Warning: Could not download {resource_name}: {e}")
 
-try:
-    nltk.data.find('taggers/averaged_perceptron_tagger')
-except LookupError:
-    nltk.download('averaged_perceptron_tagger', quiet=True)
-
-try:
-    nltk.data.find('corpora/wordnet')
-except LookupError:
-    nltk.download('wordnet', quiet=True)
+# Download all required resources
+download_nltk_resource('punkt', 'tokenizers/punkt')
+download_nltk_resource('punkt_tab', 'tokenizers/punkt_tab')
+download_nltk_resource('stopwords', 'corpora/stopwords')
+download_nltk_resource('averaged_perceptron_tagger', 'taggers/averaged_perceptron_tagger')
+download_nltk_resource('averaged_perceptron_tagger_eng', 'taggers/averaged_perceptron_tagger_eng')
+download_nltk_resource('wordnet', 'corpora/wordnet')
 
 from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize, sent_tokenize
