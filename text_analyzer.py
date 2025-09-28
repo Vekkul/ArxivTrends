@@ -83,7 +83,7 @@ class TextAnalyzer:
     def extract_keywords(self, texts: List[str], min_freq: int = 2, 
                         max_keywords: int = 100) -> List[Tuple[str, int]]:
         """
-        Extract keywords from a list of texts using frequency analysis
+        Extract intelligent keyphrases from research papers using advanced NLP
         
         Args:
             texts: List of text documents
@@ -91,46 +91,183 @@ class TextAnalyzer:
             max_keywords: Maximum number of keywords to return
             
         Returns:
-            List of (keyword, frequency) tuples sorted by frequency
+            List of (keyphrase, frequency) tuples sorted by relevance
         """
         if not texts:
             return []
         
-        all_keywords = []
+        # Extract both single terms and multi-word phrases
+        single_terms = self._extract_technical_terms(texts)
+        multi_word_phrases = self._extract_noun_phrases(texts)
+        
+        # Combine and score all terms
+        all_terms = {}
+        
+        # Add single technical terms with higher weight for rare/technical words
+        for term, freq in single_terms:
+            if freq >= min_freq:
+                # Boost score for technical-looking terms (CamelCase, numbers, etc.)
+                score = freq * self._calculate_technical_score(term)
+                all_terms[term] = score
+        
+        # Add multi-word phrases with even higher weight
+        for phrase, freq in multi_word_phrases:
+            if freq >= min_freq and len(phrase.split()) >= 2:
+                # Multi-word phrases get higher scores as they're more specific
+                score = freq * 2.5  # Boost multi-word phrases
+                all_terms[phrase] = score
+        
+        # Sort by score and return top results
+        sorted_terms = sorted(all_terms.items(), key=lambda x: x[1], reverse=True)
+        
+        # Convert scores back to frequencies for display
+        return [(term, int(score)) for term, score in sorted_terms[:max_keywords]]
+    
+    def _extract_technical_terms(self, texts: List[str]) -> List[Tuple[str, int]]:
+        """Extract technical and domain-specific terms"""
+        all_terms = []
+        
+        # Enhanced academic and common word filters
+        enhanced_stop_words = self.stop_words.union({
+            'result', 'results', 'conclusion', 'conclusions', 'findings', 'finding',
+            'paper', 'papers', 'study', 'studies', 'research', 'work', 'works',
+            'method', 'methods', 'approach', 'approaches', 'technique', 'techniques',
+            'analysis', 'analyses', 'experiment', 'experiments', 'evaluation',
+            'implementation', 'development', 'application', 'applications',
+            'problem', 'problems', 'solution', 'solutions', 'issue', 'issues',
+            'data', 'information', 'knowledge', 'performance', 'effectiveness',
+            'improvement', 'improvements', 'enhancement', 'enhancements',
+            'comparison', 'comparisons', 'investigation', 'investigations'
+        })
         
         for text in texts:
             if not isinstance(text, str):
                 continue
                 
-            # Preprocess text
+            # Clean text but preserve technical terms
             cleaned_text = self.preprocess_text(text)
-            
-            # Tokenize
             tokens = word_tokenize(cleaned_text)
-            
-            # POS tagging to keep only nouns and adjectives
             pos_tags = pos_tag(tokens)
             
-            # Filter for relevant POS tags and remove stop words
-            keywords = []
             for word, pos in pos_tags:
-                if (pos.startswith('NN') or pos.startswith('JJ')) and \
-                   len(word) > 2 and \
-                   word not in self.stop_words:
-                    # Lemmatize the word
-                    lemmatized = self.lemmatizer.lemmatize(word)
-                    keywords.append(lemmatized)
+                if len(word) > 3 and word not in enhanced_stop_words:
+                    # Focus on nouns, proper nouns, and technical adjectives
+                    if pos.startswith('NN') or pos.startswith('JJ'):
+                        # Give higher weight to technical-looking terms
+                        if self._is_technical_term(word):
+                            lemmatized = self.lemmatizer.lemmatize(word)
+                            all_terms.append(lemmatized)
+        
+        return Counter(all_terms).most_common(200)
+    
+    def _extract_noun_phrases(self, texts: List[str]) -> List[Tuple[str, int]]:
+        """Extract meaningful multi-word noun phrases"""
+        all_phrases = []
+        
+        for text in texts:
+            if not isinstance(text, str):
+                continue
             
-            all_keywords.extend(keywords)
+            # Simple noun phrase extraction using POS patterns
+            cleaned_text = self.preprocess_text(text)
+            tokens = word_tokenize(cleaned_text)
+            pos_tags = pos_tag(tokens)
+            
+            # Look for patterns like "Adjective + Noun" or "Noun + Noun"
+            phrases = self._extract_phrase_patterns(pos_tags)
+            all_phrases.extend(phrases)
         
-        # Count frequencies
-        keyword_counts = Counter(all_keywords)
+        # Filter phrases and return most common
+        phrase_counts = Counter(all_phrases)
         
-        # Filter by minimum frequency and return top keywords
-        filtered_keywords = [(k, v) for k, v in keyword_counts.items() if v >= min_freq]
-        filtered_keywords.sort(key=lambda x: x[1], reverse=True)
+        # Filter out phrases containing too many common words
+        filtered_phrases = []
+        for phrase, count in phrase_counts.items():
+            if self._is_meaningful_phrase(phrase):
+                filtered_phrases.append((phrase, count))
         
-        return filtered_keywords[:max_keywords]
+        return sorted(filtered_phrases, key=lambda x: x[1], reverse=True)[:100]
+    
+    def _extract_phrase_patterns(self, pos_tags: List[Tuple[str, str]]) -> List[str]:
+        """Extract noun phrases using POS tag patterns"""
+        phrases = []
+        current_phrase = []
+        
+        for i, (word, pos) in enumerate(pos_tags):
+            # Start or continue a noun phrase
+            if pos.startswith('NN') or pos.startswith('JJ') or pos.startswith('VBG'):
+                if len(word) > 2 and word not in self.stop_words:
+                    current_phrase.append(word)
+            else:
+                # End current phrase if it has 2+ words
+                if len(current_phrase) >= 2:
+                    phrase = ' '.join(current_phrase)
+                    if len(phrase) > 5:  # Minimum phrase length
+                        phrases.append(phrase)
+                current_phrase = []
+        
+        # Don't forget the last phrase
+        if len(current_phrase) >= 2:
+            phrase = ' '.join(current_phrase)
+            if len(phrase) > 5:
+                phrases.append(phrase)
+        
+        return phrases
+    
+    def _is_technical_term(self, word: str) -> bool:
+        """Determine if a word looks like a technical term"""
+        # Check for technical indicators
+        has_numbers = any(c.isdigit() for c in word)
+        has_capitals = any(c.isupper() for c in word[1:])  # CamelCase
+        is_long = len(word) > 6
+        has_prefixes = any(word.startswith(prefix) for prefix in 
+                          ['multi', 'semi', 'anti', 'pre', 'post', 'non', 'meta', 'hyper'])
+        has_suffixes = any(word.endswith(suffix) for suffix in 
+                          ['tion', 'sion', 'ment', 'ness', 'ity', 'ism', 'ology', 'ographic'])
+        
+        return has_numbers or has_capitals or (is_long and (has_prefixes or has_suffixes))
+    
+    def _is_meaningful_phrase(self, phrase: str) -> bool:
+        """Check if a phrase contains meaningful research concepts"""
+        words = phrase.lower().split()
+        
+        # Skip if too many common words
+        common_words = {'the', 'and', 'or', 'of', 'in', 'on', 'at', 'to', 'for', 'with', 'by'}
+        common_count = sum(1 for word in words if word in common_words)
+        
+        # Skip if more than 30% common words
+        if len(words) > 0 and common_count / len(words) > 0.3:
+            return False
+        
+        # Skip overly generic academic phrases
+        generic_phrases = {
+            'proposed method', 'new approach', 'experimental results', 'future work',
+            'related work', 'previous work', 'real world', 'case study', 'data set',
+            'large scale', 'high quality', 'state art', 'machine learning'
+        }
+        
+        if phrase.lower() in generic_phrases:
+            return False
+        
+        return True
+    
+    def _calculate_technical_score(self, term: str) -> float:
+        """Calculate a technical relevance score for a term"""
+        score = 1.0
+        
+        # Boost for technical indicators
+        if self._is_technical_term(term):
+            score *= 1.5
+        
+        # Boost for longer, more specific terms
+        if len(term) > 8:
+            score *= 1.2
+        
+        # Boost for terms with specific patterns
+        if any(pattern in term.lower() for pattern in ['neural', 'quantum', 'algorithm', 'model', 'network']):
+            score *= 1.3
+        
+        return score
     
     def extract_phrases(self, texts: List[str], min_freq: int = 2,
                        phrase_length: int = 2) -> List[Tuple[str, int]]:
@@ -172,14 +309,14 @@ class TextAnalyzer:
     
     def cluster_topics(self, texts: List[str], n_clusters: int = 5) -> List[Dict]:
         """
-        Cluster texts into topics using K-means and TF-IDF
+        Cluster texts into intelligent research topics using enhanced NLP
         
         Args:
             texts: List of text documents
             n_clusters: Number of clusters/topics
             
         Returns:
-            List of topic dictionaries with keywords and paper indices
+            List of topic dictionaries with meaningful keyphrases and paper indices
         """
         if len(texts) < n_clusters:
             n_clusters = max(1, len(texts) // 2)
@@ -187,8 +324,16 @@ class TextAnalyzer:
         if not texts or n_clusters < 1:
             return []
         
-        # Preprocess texts
-        processed_texts = [self.preprocess_text(text) for text in texts]
+        # Enhanced preprocessing for research papers
+        processed_texts = []
+        for text in texts:
+            # Extract both the full text and key technical terms
+            cleaned = self.preprocess_text(text)
+            # Focus on noun phrases and technical terms for topic modeling
+            keyphrases = self._extract_text_keyphrases_for_topics(text)
+            # Combine cleaned text with extracted keyphrases for richer representation
+            enhanced_text = cleaned + ' ' + ' '.join(keyphrases)
+            processed_texts.append(enhanced_text)
         
         # Remove empty texts
         non_empty_texts = [(i, text) for i, text in enumerate(processed_texts) if text.strip()]
@@ -199,13 +344,17 @@ class TextAnalyzer:
         indices, clean_texts = zip(*non_empty_texts)
         
         try:
-            # Create TF-IDF vectors
+            # Enhanced TF-IDF with focus on meaningful phrases
             vectorizer = TfidfVectorizer(
-                max_features=1000,
+                max_features=1500,
                 stop_words='english',
-                ngram_range=(1, 2),
+                ngram_range=(1, 3),  # Include trigrams for better phrases
                 min_df=2,
-                max_df=0.8
+                max_df=0.7,
+                token_pattern=r'\b[a-zA-Z][a-zA-Z\-]+[a-zA-Z]\b',  # Include hyphenated terms
+                use_idf=True,
+                smooth_idf=True,
+                sublinear_tf=True  # Better handling of term frequencies
             )
             
             tfidf_matrix = vectorizer.fit_transform(clean_texts)
@@ -213,8 +362,14 @@ class TextAnalyzer:
             if tfidf_matrix.shape[0] < n_clusters:
                 n_clusters = tfidf_matrix.shape[0]
             
-            # Perform K-means clustering
-            kmeans = KMeans(n_clusters=n_clusters, random_state=42, n_init='auto')
+            # Use K-means clustering with better initialization
+            kmeans = KMeans(
+                n_clusters=n_clusters, 
+                random_state=42, 
+                n_init='auto',
+                max_iter=300,
+                init='k-means++'
+            )
             cluster_labels = kmeans.fit_predict(tfidf_matrix)
             
             # Get feature names
@@ -222,30 +377,118 @@ class TextAnalyzer:
             
             topics = []
             for i in range(n_clusters):
-                # Get cluster center
+                # Get cluster center and top features
                 cluster_center = kmeans.cluster_centers_[i]
                 
-                # Get top keywords for this cluster
-                top_indices = cluster_center.argsort()[-10:][::-1]
-                keywords = [feature_names[idx] for idx in top_indices]
+                # Get top features with higher threshold for quality
+                top_indices = cluster_center.argsort()[-15:][::-1]
+                all_features = [feature_names[idx] for idx in top_indices]
+                
+                # Filter for meaningful research terms
+                meaningful_keywords = self._filter_topic_keywords(all_features)
                 
                 # Get papers in this cluster
                 cluster_papers = [indices[j] for j, label in enumerate(cluster_labels) if label == i]
                 
+                # Calculate topic coherence score
+                coherence_score = self._calculate_topic_coherence(cluster_center, top_indices)
+                
                 topics.append({
-                    'keywords': keywords,
+                    'keywords': meaningful_keywords[:8],  # Top 8 meaningful terms
                     'papers': cluster_papers,
-                    'size': len(cluster_papers)
+                    'size': len(cluster_papers),
+                    'coherence': coherence_score
                 })
             
-            # Sort topics by size
-            topics.sort(key=lambda x: x['size'], reverse=True)
+            # Sort topics by size and coherence
+            topics.sort(key=lambda x: (x['size'], x['coherence']), reverse=True)
             
             return topics
             
         except Exception as e:
             st.warning(f"Error in topic clustering: {str(e)}")
             return []
+    
+    def _extract_text_keyphrases_for_topics(self, text: str) -> List[str]:
+        """Extract key phrases specifically for topic modeling"""
+        if not isinstance(text, str):
+            return []
+        
+        cleaned_text = self.preprocess_text(text)
+        tokens = word_tokenize(cleaned_text)
+        pos_tags = pos_tag(tokens)
+        
+        keyphrases = []
+        current_phrase = []
+        
+        for word, pos in pos_tags:
+            # Build noun phrases and technical terms
+            if (pos.startswith('NN') or pos.startswith('JJ') or pos.startswith('VBG')) and \
+               len(word) > 2 and word not in self.stop_words:
+                current_phrase.append(word)
+            else:
+                if len(current_phrase) >= 1:
+                    if len(current_phrase) == 1:
+                        # Single technical term
+                        if self._is_technical_term(current_phrase[0]):
+                            keyphrases.append(current_phrase[0])
+                    else:
+                        # Multi-word phrase
+                        phrase = ' '.join(current_phrase)
+                        if self._is_meaningful_phrase(phrase):
+                            keyphrases.append(phrase)
+                current_phrase = []
+        
+        # Don't forget last phrase
+        if len(current_phrase) >= 1:
+            if len(current_phrase) == 1 and self._is_technical_term(current_phrase[0]):
+                keyphrases.append(current_phrase[0])
+            elif len(current_phrase) > 1:
+                phrase = ' '.join(current_phrase)
+                if self._is_meaningful_phrase(phrase):
+                    keyphrases.append(phrase)
+        
+        return keyphrases
+    
+    def _filter_topic_keywords(self, keywords: List[str]) -> List[str]:
+        """Filter topic keywords to focus on meaningful research terms"""
+        filtered = []
+        
+        # Additional topic-specific filters
+        topic_stop_words = {
+            'show', 'shows', 'shown', 'present', 'presents', 'presented',
+            'provide', 'provides', 'provided', 'demonstrate', 'demonstrates',
+            'use', 'used', 'uses', 'based', 'propose', 'proposed', 'approach'
+        }
+        
+        for keyword in keywords:
+            # Skip if it's a common topic word
+            if keyword.lower() in topic_stop_words:
+                continue
+            
+            # Prioritize multi-word phrases
+            if ' ' in keyword:
+                if self._is_meaningful_phrase(keyword):
+                    filtered.append(keyword)
+            # Include technical single words
+            elif len(keyword) > 4 and self._is_technical_term(keyword):
+                filtered.append(keyword)
+            # Include domain-specific terms
+            elif any(pattern in keyword.lower() for pattern in 
+                    ['neural', 'quantum', 'algorithm', 'network', 'learning', 'optimization',
+                     'classification', 'regression', 'deep', 'graph', 'vision', 'language']):
+                filtered.append(keyword)
+        
+        return filtered
+    
+    def _calculate_topic_coherence(self, cluster_center: np.ndarray, top_indices: np.ndarray) -> float:
+        """Calculate a simple coherence score for topic quality"""
+        # Simple coherence based on the concentration of top terms
+        top_scores = cluster_center[top_indices]
+        if len(top_scores) > 1:
+            # Higher coherence if top terms have similar high scores
+            return float(np.std(top_scores[-5:]))  # Coherence of top 5 terms
+        return 0.0
     
     def analyze_sentiment_basic(self, texts: List[str]) -> Dict[str, float]:
         """

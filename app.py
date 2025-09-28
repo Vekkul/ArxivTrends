@@ -29,39 +29,42 @@ def get_components():
 arxiv_client, text_analyzer, data_processor, visualizations = get_components()
 
 def analyze_trending_concepts(df):
-    """Extract and analyze trending concepts from paper titles"""
+    """Extract and analyze trending research concepts using intelligent NLP"""
     import re
     from collections import Counter
     
     if df.empty:
         return []
     
-    # Extract meaningful words from titles
-    all_concepts = []
-    stop_words = {'the', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by',
-                 'from', 'up', 'about', 'into', 'over', 'after', 'an', 'a', 'is', 'are', 'was', 'were',
-                 'using', 'based', 'analysis', 'study', 'research', 'approach', 'method', 'system', 
-                 'model', 'application', 'paper', 'new', 'novel', 'improved', 'enhanced', 'via', 
-                 'through', 'can', 'will', 'may', 'our', 'we', 'their', 'this', 'that', 'these', 
-                 'those', 'has', 'have', 'had', 'been', 'being', 'do', 'does', 'did', 'will', 'would',
-                 'could', 'should', 'may', 'might', 'must', 'shall', 'get', 'got', 'getting'}
+    # Use the enhanced text analyzer for intelligent concept extraction
+    text_analyzer_instance = text_analyzer
     
-    for title in df['title'].fillna(''):
-        # Extract meaningful terms (2+ characters, alphabetic)
-        words = re.findall(r'\b[a-zA-Z]{3,}\b', title.lower())
-        # Filter out common academic words
-        meaningful_words = [word for word in words if word not in stop_words]
-        all_concepts.extend(meaningful_words)
+    # Extract concepts from titles using the improved keyword extraction
+    titles = df['title'].fillna('').tolist()
     
-    # Count frequencies
-    concept_counts = Counter(all_concepts)
+    # Get intelligent keyphrases instead of simple words
+    keyphrases = text_analyzer_instance.extract_keywords(titles, min_freq=2, max_keywords=30)
     
-    # Return top concepts with frequency >= 2
-    trending = [{'concept': concept, 'frequency': freq} 
-                for concept, freq in concept_counts.most_common(50) 
-                if freq >= 2]
+    # Convert to the expected format
+    trending = [{'concept': concept, 'frequency': freq} for concept, freq in keyphrases]
     
-    return trending
+    # If we don't get enough from titles, also analyze abstracts but weight them lower
+    if len(trending) < 10:
+        abstracts = df['abstract'].fillna('').tolist()
+        abstract_keyphrases = text_analyzer_instance.extract_keywords(abstracts, min_freq=2, max_keywords=20)
+        
+        # Add abstract concepts with lower weight
+        for concept, freq in abstract_keyphrases:
+            # Check if concept already exists from titles
+            existing = next((item for item in trending if item['concept'] == concept), None)
+            if existing:
+                existing['frequency'] += freq // 2  # Lower weight for abstract concepts
+            else:
+                trending.append({'concept': concept, 'frequency': freq // 2})
+    
+    # Sort by frequency and return top concepts
+    trending.sort(key=lambda x: x['frequency'], reverse=True)
+    return trending[:25]  # Return top 25 concepts
 
 def analyze_concept_evolution(df):
     """Analyze how research concepts evolve over time"""
