@@ -201,10 +201,14 @@ def main():
                         n_clusters = min(5, max(1, len(abstracts)//3)) if len(abstracts) >= 3 else 1
                         topics = text_analyzer.cluster_topics(abstracts, n_clusters=n_clusters)
                         
+                        # Generate research insights
+                        research_insights = text_analyzer.generate_research_insights(abstracts, max_insights=5)
+                        
                         # Store results
                         st.session_state.analysis_results = {
                             'keywords': keywords[:max_keywords],
                             'topics': topics,
+                            'research_insights': research_insights,
                             'analysis_timestamp': datetime.now()
                         }
                         
@@ -363,7 +367,18 @@ def display_trends_analysis():
 def display_text_analysis():
     """Display text analysis results"""
     if st.session_state.analysis_results:
-        st.subheader("🔤 Keyword Analysis")
+        # Research Insights Section (NEW!)
+        research_insights = st.session_state.analysis_results.get('research_insights', [])
+        if research_insights:
+            st.subheader("🧠 Research Insights")
+            st.markdown("*Coherent analysis of research themes and patterns:*")
+            
+            for i, insight in enumerate(research_insights, 1):
+                st.markdown(f"**{i}.** {insight}")
+            
+            st.markdown("---")
+        
+        st.subheader("🔤 Detailed Keyword Analysis")
         
         keywords = st.session_state.analysis_results.get('keywords', [])
         if keywords:
@@ -371,47 +386,59 @@ def display_text_analysis():
             keywords_df = pd.DataFrame(keywords, columns=['Keyword', 'Frequency'])
             
             fig = px.bar(
-                keywords_df.head(20),
+                keywords_df.head(15),
                 x='Frequency',
                 y='Keyword',
                 orientation='h',
-                title='Top 20 Most Frequent Keywords'
+                title='Top 15 Research Keywords & Concepts',
+                color='Frequency',
+                color_continuous_scale='viridis'
             )
-            fig.update_layout(height=600)
+            fig.update_layout(height=500)
             st.plotly_chart(fig, use_container_width=True)
             
-            # Keywords word cloud representation (using bar chart)
-            st.subheader("Keyword Frequency Distribution")
+            # Keywords analysis in two columns
             col1, col2 = st.columns(2)
             
             with col1:
-                st.write("**Top Keywords:**")
-                for i, (keyword, freq) in enumerate(keywords[:10], 1):
-                    st.write(f"{i}. **{keyword}**: {freq} occurrences")
+                st.write("**Top Research Concepts:**")
+                for i, (keyword, freq) in enumerate(keywords[:8], 1):
+                    # Highlight multi-word phrases
+                    if ' ' in keyword:
+                        st.write(f"{i}. **{keyword}** _{freq} times_")
+                    else:
+                        st.write(f"{i}. {keyword} _{freq} times_")
             
             with col2:
                 # Show keyword statistics
-                frequencies = [freq for _, freq in keywords]
-                st.write("**Statistics:**")
-                st.write(f"- Total unique keywords: {len(keywords)}")
-                st.write(f"- Average frequency: {sum(frequencies)/len(frequencies):.1f}")
-                st.write(f"- Max frequency: {max(frequencies)}")
-                st.write(f"- Min frequency: {min(frequencies)}")
+                multi_word = sum(1 for keyword, _ in keywords if ' ' in keyword)
+                single_word = len(keywords) - multi_word
+                st.write("**Analysis Quality:**")
+                st.write(f"- Multi-word concepts: {multi_word}")
+                st.write(f"- Single terms: {single_word}")
+                st.write(f"- Concept specificity: {multi_word/(len(keywords)) * 100:.1f}%")
+                st.write(f"- Total concepts extracted: {len(keywords)}")
         
         # Topic clustering results
         topics = st.session_state.analysis_results.get('topics', [])
         if topics:
-            st.subheader("📚 Topic Clusters")
+            st.subheader("📚 Research Topic Clusters")
             for i, topic in enumerate(topics, 1):
-                with st.expander(f"Topic {i}: {', '.join(topic['keywords'][:3])}..."):
-                    st.write(f"**Keywords:** {', '.join(topic['keywords'])}")
-                    st.write(f"**Number of papers:** {len(topic['papers'])}")
+                # Create more informative topic titles
+                topic_title = f"Research Area {i}: {', '.join(topic['keywords'][:2])}"
+                if len(topic['keywords']) > 2:
+                    topic_title += "..."
+                
+                with st.expander(f"{topic_title} ({len(topic['papers'])} papers)"):
+                    st.write(f"**Key Concepts:** {', '.join(topic['keywords'][:6])}")
+                    st.write(f"**Papers in this cluster:** {len(topic['papers'])}")
+                    
                     if topic['papers']:
-                        st.write("**Sample papers:**")
+                        st.write("**Representative papers:**")
                         for paper_idx in topic['papers'][:3]:
                             if paper_idx < len(st.session_state.papers_data):
                                 paper = st.session_state.papers_data.iloc[paper_idx]
-                                st.write(f"- {paper['title']}")
+                                st.write(f"• {paper['title']}")
     else:
         st.info("👈 Click 'Analyze Papers' in the sidebar to perform text analysis.")
 

@@ -490,6 +490,259 @@ class TextAnalyzer:
             return float(np.std(top_scores[-5:]))  # Coherence of top 5 terms
         return 0.0
     
+    def generate_research_insights(self, texts: List[str], max_insights: int = 5) -> List[str]:
+        """
+        Generate coherent research insights by analyzing patterns and concepts
+        
+        Args:
+            texts: List of research paper abstracts/titles
+            max_insights: Maximum number of insights to generate
+            
+        Returns:
+            List of insight sentences describing research themes
+        """
+        if not texts or len(texts) < 3:
+            return ["Insufficient data to generate research insights."]
+        
+        insights = []
+        
+        # 1. Extract research themes and methodologies
+        themes = self._extract_research_themes(texts)
+        methodologies = self._extract_methodologies(texts)
+        applications = self._extract_applications(texts)
+        
+        # 2. Generate insights from patterns
+        if themes:
+            theme_insight = self._generate_theme_insight(themes)
+            if theme_insight:
+                insights.append(theme_insight)
+        
+        if methodologies:
+            method_insight = self._generate_methodology_insight(methodologies)
+            if method_insight:
+                insights.append(method_insight)
+        
+        if applications:
+            app_insight = self._generate_application_insight(applications)
+            if app_insight:
+                insights.append(app_insight)
+        
+        # 3. Generate trend insights
+        trend_insight = self._generate_trend_insight(texts)
+        if trend_insight:
+            insights.append(trend_insight)
+        
+        # 4. Generate complexity/focus insight
+        focus_insight = self._generate_focus_insight(texts, themes, methodologies)
+        if focus_insight:
+            insights.append(focus_insight)
+        
+        return insights[:max_insights]
+    
+    def _extract_research_themes(self, texts: List[str]) -> Dict[str, int]:
+        """Extract core research themes from abstracts"""
+        theme_patterns = {
+            'machine_learning': ['machine learning', 'deep learning', 'neural network', 'artificial intelligence', 'ai model'],
+            'computer_vision': ['computer vision', 'image recognition', 'object detection', 'visual', 'image processing'],
+            'natural_language': ['natural language', 'nlp', 'text processing', 'language model', 'sentiment analysis'],
+            'optimization': ['optimization', 'algorithm', 'efficient', 'performance', 'scalable'],
+            'security': ['security', 'privacy', 'encryption', 'vulnerability', 'attack'],
+            'robotics': ['robot', 'robotics', 'autonomous', 'control system', 'navigation'],
+            'data_science': ['data mining', 'big data', 'analytics', 'statistical', 'prediction'],
+            'quantum': ['quantum', 'quantum computing', 'quantum algorithm'],
+            'blockchain': ['blockchain', 'cryptocurrency', 'distributed ledger']
+        }
+        
+        theme_counts = {}
+        all_text = ' '.join(texts).lower()
+        
+        for theme, patterns in theme_patterns.items():
+            count = sum(all_text.count(pattern) for pattern in patterns)
+            if count > 0:
+                theme_counts[theme] = count
+        
+        return theme_counts
+    
+    def _extract_methodologies(self, texts: List[str]) -> Dict[str, int]:
+        """Extract research methodologies and approaches"""
+        method_patterns = {
+            'supervised_learning': ['supervised', 'classification', 'regression', 'labeled data'],
+            'unsupervised_learning': ['unsupervised', 'clustering', 'dimensionality reduction'],
+            'reinforcement_learning': ['reinforcement', 'reward', 'policy', 'agent'],
+            'transfer_learning': ['transfer learning', 'pre-trained', 'fine-tuning'],
+            'ensemble_methods': ['ensemble', 'bagging', 'boosting', 'random forest'],
+            'simulation': ['simulation', 'modeling', 'synthetic data'],
+            'experimental': ['experiment', 'empirical', 'evaluation', 'benchmark'],
+            'theoretical': ['theoretical', 'proof', 'analysis', 'mathematical']
+        }
+        
+        method_counts = {}
+        all_text = ' '.join(texts).lower()
+        
+        for method, patterns in method_patterns.items():
+            count = sum(all_text.count(pattern) for pattern in patterns)
+            if count > 0:
+                method_counts[method] = count
+        
+        return method_counts
+    
+    def _extract_applications(self, texts: List[str]) -> Dict[str, int]:
+        """Extract application domains"""
+        app_patterns = {
+            'healthcare': ['medical', 'health', 'diagnosis', 'patient', 'clinical'],
+            'finance': ['financial', 'trading', 'investment', 'market', 'economic'],
+            'autonomous_vehicles': ['autonomous vehicle', 'self-driving', 'automotive'],
+            'social_media': ['social media', 'social network', 'online'],
+            'gaming': ['game', 'gaming', 'virtual reality', 'augmented reality'],
+            'education': ['education', 'learning', 'student', 'teaching'],
+            'manufacturing': ['manufacturing', 'industrial', 'production'],
+            'recommendation': ['recommendation', 'recommender', 'personalization']
+        }
+        
+        app_counts = {}
+        all_text = ' '.join(texts).lower()
+        
+        for app, patterns in app_patterns.items():
+            count = sum(all_text.count(pattern) for pattern in patterns)
+            if count > 0:
+                app_counts[app] = count
+        
+        return app_counts
+    
+    def _generate_theme_insight(self, themes: Dict[str, int]) -> str:
+        """Generate insight about research themes"""
+        if not themes:
+            return ""
+        
+        top_themes = sorted(themes.items(), key=lambda x: x[1], reverse=True)[:3]
+        theme_names = {
+            'machine_learning': 'machine learning and AI',
+            'computer_vision': 'computer vision',
+            'natural_language': 'natural language processing',
+            'optimization': 'optimization and algorithmic efficiency',
+            'security': 'cybersecurity and privacy',
+            'robotics': 'robotics and autonomous systems',
+            'data_science': 'data science and analytics',
+            'quantum': 'quantum computing',
+            'blockchain': 'blockchain and distributed systems'
+        }
+        
+        if len(top_themes) == 1:
+            theme = theme_names.get(top_themes[0][0], top_themes[0][0])
+            return f"Research is heavily focused on {theme} applications and methodologies."
+        elif len(top_themes) >= 2:
+            primary = theme_names.get(top_themes[0][0], top_themes[0][0])
+            secondary = theme_names.get(top_themes[1][0], top_themes[1][0])
+            return f"Research spans primarily {primary} with significant work in {secondary}, indicating interdisciplinary approaches."
+        
+        return ""
+    
+    def _generate_methodology_insight(self, methodologies: Dict[str, int]) -> str:
+        """Generate insight about research methodologies"""
+        if not methodologies:
+            return ""
+        
+        top_methods = sorted(methodologies.items(), key=lambda x: x[1], reverse=True)[:2]
+        method_names = {
+            'supervised_learning': 'supervised learning techniques',
+            'unsupervised_learning': 'unsupervised learning approaches',
+            'reinforcement_learning': 'reinforcement learning methods',
+            'transfer_learning': 'transfer learning strategies',
+            'ensemble_methods': 'ensemble and hybrid methods',
+            'simulation': 'simulation-based approaches',
+            'experimental': 'empirical and experimental methods',
+            'theoretical': 'theoretical analysis and mathematical proofs'
+        }
+        
+        if len(top_methods) >= 1:
+            primary_method = method_names.get(top_methods[0][0], top_methods[0][0])
+            if len(top_methods) >= 2:
+                secondary_method = method_names.get(top_methods[1][0], top_methods[1][0])
+                return f"Researchers are employing {primary_method} alongside {secondary_method} to tackle complex problems."
+            else:
+                return f"The dominant methodology involves {primary_method} for problem-solving."
+        
+        return ""
+    
+    def _generate_application_insight(self, applications: Dict[str, int]) -> str:
+        """Generate insight about application domains"""
+        if not applications:
+            return ""
+        
+        top_apps = sorted(applications.items(), key=lambda x: x[1], reverse=True)[:2]
+        app_names = {
+            'healthcare': 'healthcare and medical applications',
+            'finance': 'financial technology and economics',
+            'autonomous_vehicles': 'autonomous vehicle development',
+            'social_media': 'social media and network analysis',
+            'gaming': 'gaming and virtual reality',
+            'education': 'educational technology',
+            'manufacturing': 'industrial and manufacturing systems',
+            'recommendation': 'recommendation and personalization systems'
+        }
+        
+        if len(top_apps) >= 1:
+            primary_app = app_names.get(top_apps[0][0], top_apps[0][0])
+            return f"Practical applications are concentrated in {primary_app}, demonstrating real-world impact."
+        
+        return ""
+    
+    def _generate_trend_insight(self, texts: List[str]) -> str:
+        """Generate insight about emerging trends"""
+        all_text = ' '.join(texts).lower()
+        
+        # Look for emerging trend indicators
+        emerging_patterns = {
+            'explainable_ai': ['explainable', 'interpretable', 'transparency'],
+            'federated_learning': ['federated', 'distributed training'],
+            'edge_computing': ['edge computing', 'mobile', 'embedded'],
+            'multimodal': ['multimodal', 'multi-modal', 'cross-modal'],
+            'few_shot': ['few-shot', 'zero-shot', 'meta-learning'],
+            'adversarial': ['adversarial', 'robust', 'attack'],
+            'sustainability': ['green', 'energy efficient', 'sustainable']
+        }
+        
+        trend_counts = {}
+        for trend, patterns in emerging_patterns.items():
+            count = sum(all_text.count(pattern) for pattern in patterns)
+            if count > 0:
+                trend_counts[trend] = count
+        
+        if trend_counts:
+            top_trend = max(trend_counts.items(), key=lambda x: x[1])
+            trend_names = {
+                'explainable_ai': 'explainable and interpretable AI',
+                'federated_learning': 'federated and distributed learning',
+                'edge_computing': 'edge computing and mobile deployment',
+                'multimodal': 'multimodal and cross-domain integration',
+                'few_shot': 'few-shot and meta-learning approaches',
+                'adversarial': 'adversarial robustness and security',
+                'sustainability': 'sustainable and energy-efficient computing'
+            }
+            trend_name = trend_names.get(top_trend[0], top_trend[0])
+            return f"Emerging trends show growing interest in {trend_name}."
+        
+        return ""
+    
+    def _generate_focus_insight(self, texts: List[str], themes: Dict[str, int], methodologies: Dict[str, int]) -> str:
+        """Generate insight about research focus and complexity"""
+        all_text = ' '.join(texts).lower()
+        
+        # Analyze complexity indicators
+        complexity_indicators = [
+            'novel', 'innovative', 'breakthrough', 'advanced', 'state-of-the-art',
+            'challenging', 'complex', 'sophisticated', 'cutting-edge'
+        ]
+        
+        novelty_count = sum(all_text.count(indicator) for indicator in complexity_indicators)
+        
+        if novelty_count > len(texts) * 0.3:  # High novelty
+            return "Research demonstrates high novelty and innovation, pushing the boundaries of current capabilities."
+        elif len(themes) > 3 and len(methodologies) > 2:  # Interdisciplinary
+            return "Work shows strong interdisciplinary collaboration, combining multiple research domains and methodologies."
+        
+        return ""
+    
     def analyze_sentiment_basic(self, texts: List[str]) -> Dict[str, float]:
         """
         Basic sentiment analysis using word counts
